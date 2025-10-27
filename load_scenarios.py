@@ -12,8 +12,8 @@ import json
 from datetime import datetime
 
 class LoadTestRunner:
-    def __init__(self, base_dir="/home/laura/poly/test-keycloak"):
-        self.base_dir = base_dir
+    def __init__(self):
+        base_dir = os.getcwd()
         self.results_dir = f"{base_dir}/test_results"
         self.scenarios = {
             "light_load": {"users": 20, "spawn_rate": 2, "run_time": "5m"},
