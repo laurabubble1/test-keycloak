@@ -1,19 +1,31 @@
-# Keycloak Load Testing - User Manual
+# Keycloak Performance Testing Suite
 
 ## Overview
 
-This comprehensive load testing suite is designed to evaluate Keycloak's performance under various load conditions using Locust, with integrated monitoring via Prometheus, Grafana, and system monitoring tools.
+This professional performance testing suite provides isolated load testing for Keycloak using a two-Docker architecture. The setup separates the target system (Keycloak + monitoring) from the load generator (Locust), simulating realistic external load while maintaining clean resource isolation.
+
+## Architecture
+
+### Target System (`docker-compose-target.yml`)
+- Keycloak + PostgreSQL database
+- Monitoring Stack: Prometheus, Grafana, Netdata, cAdvisor, Node-exporter
+- Purpose: The system under test
+
+### Load Generator (`docker-compose-locust.yml`) 
+- Locust Master + Multiple Workers
+- Purpose: Generate external load against target system
+- Network: Separate Docker network for true isolation
 
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
 2. [Installation & Setup](#installation--setup)
-3. [API Endpoints Tested](#api-endpoints-tested)
-4. [Load Test Scenarios](#load-test-scenarios)
-5. [Monitoring Configuration](#monitoring-configuration)
-6. [Execution Instructions](#execution-instructions)
-7. [Performance Analysis](#performance-analysis)
-8. [Quality Goals & Metrics](#quality-goals--metrics)
+3. [Architecture Details](#architecture-details)
+4. [API Endpoints Tested](#api-endpoints-tested)
+5. [Load Test Scenarios](#load-test-scenarios)
+6. [Monitoring Configuration](#monitoring-configuration)
+7. [Usage Instructions](#usage-instructions)
+8. [Performance Analysis](#performance-analysis)
 9. [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
@@ -26,16 +38,17 @@ This comprehensive load testing suite is designed to evaluate Keycloak's perform
 - 20GB free disk space
 - Network access for downloading Docker images
 
-### Required Python Packages (if you intend on running the load tests using your local python installation)
+### Files Structure
 
-```bash
-pip install locust psutil matplotlib pandas numpy requests
 ```
-
-### Optional Python Packages (for enhanced visualizations)
-
-```bash
-pip install seaborn plotly
+test-keycloak/
+├── control.sh                    # Main control script
+├── docker-compose-target.yml     # Target system (Keycloak + monitoring)
+├── docker-compose-locust.yml     # Load generator (Locust)
+├── locustfile-external.py        # Load test scenarios for external access
+├── prometheus.yml                # Metrics collection config
+├── keycloak-dashboard.json       # Grafana dashboard
+└── README.md                     # This file
 ```
 
 ## Installation & Setup
@@ -45,41 +58,57 @@ pip install seaborn plotly
 Ensure you have all files in your test directory:
 
 ```bash
-test-keycloak/
-├── docker-compose.yml
-├── prometheus.yml
-├── locustfile.py
-├── load_scenarios.py
-├── run_load_test.sh
-├── performance_monitor.py
-└── README.md
+git clone https://github.com/laurabubble1/test-keycloak.git
+cd test-keycloak
 ```
 
-### 2. Start the Infrastructure
+### 2. Start Target System (Keycloak + Monitoring)
 
 ```bash
-# Start all monitoring and Keycloak services
-docker-compose up -d
-
-# Check if services are running
-docker-compose ps
+./control.sh start-target
 ```
 
-### 3. Verify Services
-
-- Keycloak Admin Console: <http://localhost:8080/admin> (admin/admin)
-- Grafana Dashboard: <http://localhost:3000> (admin/admin)
-- Prometheus: <http://localhost:9090>
-- Netdata: <http://localhost:19999>
-- cAdvisor: <http://localhost:8081>
-- locust Web UI: <http://localhost:8089>
-
-### 4. Wait for Keycloak to Initialize
-
-Keycloak may take 2-3 minutes to fully start. Check the logs:
+### 3. Wait for Keycloak to Initialize (30-60 seconds)
 
 ```bash
-docker-compose logs keycloak
+./control.sh logs-target  # Watch startup logs
+```
+
+### 4. Start Load Generator
+
+```bash
+./control.sh start-locust
+```
+
+### 5. Access Your Systems
+
+- Locust Web Interface: http://localhost:8089
+- Keycloak Admin: http://localhost:8080/admin (admin/admin)
+- Grafana Dashboard: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
+- Netdata: http://localhost:19999
+
+## Architecture Details
+
+### Two-Docker Design Benefits
+
+- **Resource Isolation**: Load generator doesn't consume target system resources
+- **Realistic Testing**: Simulates external traffic patterns
+- **Independent Scaling**: Scale load generators separately from target
+- **Clean Monitoring**: Target system metrics aren't polluted by load generator
+- **Production-Like**: Mirrors real-world deployment scenarios
+
+### Control Script Commands
+
+```bash
+./control.sh start-target    # Start Keycloak + monitoring
+./control.sh start-locust    # Start load generator
+./control.sh stop-target     # Stop target system
+./control.sh stop-locust     # Stop load generator
+./control.sh status          # Show status of both systems
+./control.sh logs-target     # Show Keycloak logs
+./control.sh logs-locust     # Show Locust logs
+./control.sh restart-all     # Restart everything
 ```
 
 ## API Endpoints Tested
@@ -248,67 +277,78 @@ Access dashboards at <http://localhost:3000>:
 - Keycloak Performance: Application-specific metrics
 - Load Test Results: Request rates, response times, errors
 
-## Execution Instructions (if you don't want to use the locust Web UI)
+## Usage Instructions
 
-### Method 1: Using Python Script
+### Step-by-Step Testing Process
+
+#### 1. System Startup
 
 ```bash
-# Install dependencies
-pip install locust psutil matplotlib pandas numpy requests
+# Start target system (Keycloak + monitoring)
+./control.sh start-target
 
-# Run specific scenario
-python load_scenarios.py light_load    # 20 users
-python load_scenarios.py medium_load   # 100 users
-python load_scenarios.py heavy_load    # 500 users
-python load_scenarios.py stress_test   # 2000 users
+# Wait for Keycloak to fully initialize (30-60 seconds)
+./control.sh logs-target
 
-# Run all scenarios sequentially
-python load_scenarios.py all
+# Start load generator
+./control.sh start-locust
+
+# Verify everything is running
+./control.sh status
 ```
 
-### Method 2: Using Bash Script (for Linux/MacOS)
+#### 2. Configure Load Test
+
+1. Open Locust Web Interface: http://localhost:8089
+2. Set Test Parameters:
+   - Number of Users: Start with 50 for first test
+   - Spawn Rate: 5 users per second
+   - Host: Should already be set to `http://host.docker.internal:8080`
+3. Click "Start swarming"
+
+#### 3. Monitor Performance
+
+- Locust Dashboard: Real-time request statistics at http://localhost:8089
+- Grafana Dashboard: System metrics at http://localhost:3000
+- Prometheus: Raw metrics at http://localhost:9090
+
+#### 4. Test Progression
 
 ```bash
-# Make script executable
-chmod +x run_load_test.sh
-
-# Run specific scenario
-./run_load_test.sh light    # 20 users
-./run_load_test.sh medium   # 100 users
-./run_load_test.sh heavy    # 500 users
-./run_load_test.sh stress   # 2000 users
-
-# Run all scenarios
-./run_load_test.sh all
+# Start small and scale up
+Test 1: 50 users,  5/sec spawn rate   (5 minutes)
+Test 2: 100 users, 10/sec spawn rate  (10 minutes)
+Test 3: 200 users, 15/sec spawn rate  (15 minutes)
+Test 4: 500 users, 20/sec spawn rate  (20 minutes)
 ```
 
-### Method 3: Manual Locust Execution
+### Alternative Testing Methods
+
+For legacy compatibility, these scripts also exist:
 
 ```bash
-# Basic command structure
-locust -f locustfile.py \
-       --host http://localhost:8080 \
-       --users 100 \
-       --spawn-rate 5 \
-       --run-time 10m \
-       --html results.html \
-       --headless ## Run without the web UI
-
-# Web UI mode (for interactive testing)
-locust -f locustfile.py --host http://localhost:8080
-# Then open http://localhost:8089
+# Standalone load testing (without Docker separation)
+./alt_run_load_test.sh light    # 20 users
+./alt_run_load_test.sh medium   # 100 users
+./alt_run_load_test.sh heavy    # 500 users
 ```
 
-### Performance Monitoring During Tests
+### System Control Commands
 
 ```bash
-# Start performance monitoring
-python performance_monitor.py &
+# Start/stop individual systems
+./control.sh start-target     # Start only Keycloak + monitoring
+./control.sh start-locust     # Start only load generator
+./control.sh stop-target      # Stop target system
+./control.sh stop-locust      # Stop load generator
 
-# Run your load test
-python load_scenarios.py medium_load
+# System monitoring
+./control.sh status           # Show all container status
+./control.sh logs-target      # Watch Keycloak logs
+./control.sh logs-locust      # Watch Locust logs
 
-# Stop monitoring (or it stops automatically after test duration)
+# Complete restart
+./control.sh restart-all      # Restart everything cleanly
 ```
 
 ## Performance Analysis
@@ -384,19 +424,73 @@ rate(node_network_receive_bytes_total[5m])
 
 ## Troubleshooting
 
-### Common Issues
+### Common Issues and Solutions
 
-#### URL for localhost services
+#### Issue: Network Recreation Errors
 
-Use `http://host.docker.internal:PORT` instead of `http://localhost:PORT` when accessing services from within Docker containers on Windows or MacOS.
+```bash
+ERROR: Network "test-keycloak_default" needs to be recreated
+```
+
+**Solution:**
+
+```bash
+./control.sh stop-target
+./control.sh stop-locust
+./control.sh start-target
+./control.sh start-locust
+```
+
+#### Issue: Keycloak Connection Refused
+
+```bash
+ConnectionRefusedError(111, 'Connection refused')
+```
+
+**Solutions:**
+
+1. Wait for startup: Keycloak takes 30-60 seconds to initialize
+2. Check logs: `./control.sh logs-target`
+3. Verify port: http://localhost:8080 should be accessible
+4. Restart if needed: `./control.sh restart-all`
+
+#### Issue: Locust Can't Reach Keycloak
+
+**Problem**: Load generator can't connect to target system
+**Solution**: Verify `host.docker.internal` is working:
+
+```bash
+# Test from locust container
+docker exec locust-master ping host.docker.internal
+```
+
+### System Health Checks
+
+#### Verify All Services Running
+
+```bash
+./control.sh status
+# All services should show "Up" status
+```
+
+#### Check Service Accessibility
+
+```bash
+# Target system endpoints
+curl -s http://localhost:8080/realms/master/.well-known/openid_configuration
+curl -s http://localhost:9000/metrics | head -5
+curl -s http://localhost:9090/-/healthy
+curl -s http://localhost:3000/api/health
+
+# Load generator endpoint
+curl -s http://localhost:8089/
+```
 
 ### Log Locations
 
-- Keycloak logs: `docker-compose logs keycloak`
-- Prometheus logs: `docker-compose logs prometheus`
-- Grafana logs: `docker-compose logs grafana`
-- Load test results: `./test_results/`
-- Performance analysis: `./performance_analysis/`
+- Keycloak logs: `./control.sh logs-target`
+- Locust logs: `./control.sh logs-locust`
+- All system logs: `docker stats --no-stream`
 
 ### Support and Resources
 
@@ -409,13 +503,24 @@ Use `http://host.docker.internal:PORT` instead of `http://localhost:PORT` when a
 
 ## Quick Start Checklist
 
-- [ ] Install Docker and Docker Compose
-- [ ] Install Python dependencies: `pip install locust psutil matplotlib pandas numpy requests`
-- [ ] Start services: `docker-compose up -d`
-- [ ] Wait for Keycloak initialization (2-3 minutes)
-- [ ] Verify services are accessible (Keycloak, Grafana, Prometheus)
-- [ ] Run test: `python load_scenarios.py light_load`
-- [ ] Check results in `./test_results/` directory
-- [ ] Review performance analysis in `./performance_analysis/` directory
+- [ ] Install Docker and Docker Compose (latest versions)
+- [ ] Clone/download all project files to your directory
+- [ ] Make control script executable: `chmod +x control.sh`
+- [ ] Start target system: `./control.sh start-target`
+- [ ] Wait for initialization: Watch logs for "Keycloak started" message
+- [ ] Start load generator: `./control.sh start-locust`
+- [ ] Verify services: `./control.sh status` shows all "Up"
+- [ ] Access Locust: http://localhost:8089 loads successfully
+- [ ] Access Grafana: http://localhost:3000 (admin/admin)
+- [ ] Import dashboard: Upload `keycloak-dashboard.json` to Grafana
+- [ ] Run first test: 50 users, 5/sec spawn rate, 5 minutes
+- [ ] Monitor results: Watch both Locust stats and Grafana metrics
 
-For questions or issues, refer to the troubleshooting section or check service logs using `docker-compose logs [service-name]`.
+**Success Indicators:**
+
+- Locust shows green success rates (>95%)
+- Grafana displays real-time metrics
+- Response times under 500ms for 95th percentile
+- No container restarts or errors in logs
+
+For issues, start with `./control.sh restart-all` and check the troubleshooting section above.

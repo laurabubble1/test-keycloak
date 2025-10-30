@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+      POSTGRES_DB: keycloak
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    command: start-dev --metrics-enabled=true
+    ports:
+      - "8080:8080"
+      - "9000:9000"  # Management interface for metrics
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_METRICS_ENABLED: "true"
+    depends_on:
+      - postgres
+
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+  netdata:
+    image: netdata/netdata
+    ports:
+      - "19999:19999"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - netdataconfig:/etc/netdata
+      - netdatalib:/var/lib/netdata
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8081:8080"  # Changed port to avoid conflict with Keycloak
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  netdataconfig:
+  netdatalib:
+  grafana-storage:

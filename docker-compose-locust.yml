@@ -1,0 +1,48 @@
+version: '3.8'
+
+networks:
+  locust-network:
+    driver: bridge
+
+services:
+  locust-master:
+    image: locustio/locust
+    container_name: locust-master 
+    user: root 
+    ports:
+      - "8089:8089"    # Web interface
+      - "5557:5557"    # Master communication port
+    volumes:
+      - ./locustfile-external.py:/mnt/locust/locustfile.py
+    command: >
+      -f /mnt/locust/locustfile.py
+      --master
+      --web-host 0.0.0.0
+      --master-bind-host 0.0.0.0
+      --host http://host.docker.internal:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - locust-network
+
+  locust-worker:
+    image: locustio/locust
+    volumes:
+      - ./locustfile-external.py:/mnt/locust/locustfile.py
+    command: >
+      -f /mnt/locust/locustfile.py
+      --worker
+      --master-host locust-master
+      --host http://host.docker.internal:8080
+    depends_on:
+      - locust-master
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - locust-network
+    deploy:
+      replicas: 2  # Start with 2 workers
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
