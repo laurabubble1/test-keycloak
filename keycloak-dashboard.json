@@ -1,23 +1,53 @@
 {
-  "dashboard": {
     "id": null,
     "title": "Keycloak Performance Dashboard",
     "tags": ["keycloak", "performance"],
     "timezone": "browser",
     "refresh": "5s",
+    "schemaVersion": 30,
+    "version": 1,
     "time": {
       "from": "now-30m",
       "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "current": {
+            "selected": false,
+            "text": "prometheus-1",
+            "value": "ef25b717o7vnke"
+          },
+          "hide": 0,
+          "includeAll": false,
+          "label": "Datasource",
+          "multi": false,
+          "name": "DS_PROMETHEUS",
+          "options": [],
+          "query": "prometheus",
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "type": "datasource"
+        }
+      ]
     },
     "panels": [
       {
         "id": 1,
         "title": "HTTP Request Rate",
         "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "targets": [
           {
-            "expr": "rate(http_server_requests_seconds_count{job=\"keycloak-builtin\"}[1m])",
-            "legendFormat": "Requests/sec"
+            "expr": "sum(rate(http_server_requests_seconds_count{job=\"keycloak-builtin\"}[1m]))",
+            "legendFormat": "Requests/sec",
+            "refId": "A",
+            "interval": "",
+            "step": 60
           }
         ],
         "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
@@ -37,12 +67,19 @@
       },
       {
         "id": 2,
-        "title": "Response Time (95th percentile)",
+        "title": "Average Response Time",
         "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{job=\"keycloak-builtin\"}[5m]))",
-            "legendFormat": "95th percentile"
+            "expr": "sum(rate(http_server_requests_seconds_sum{job=\"keycloak-builtin\"}[5m])) / sum(rate(http_server_requests_seconds_count{job=\"keycloak-builtin\"}[5m]))",
+            "legendFormat": "Average Response Time",
+            "refId": "A",
+            "interval": "",
+            "step": 60
           }
         ],
         "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
@@ -64,10 +101,17 @@
         "id": 3,
         "title": "JVM Heap Usage %",
         "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "targets": [
           {
-            "expr": "(jvm_memory_used_bytes{job=\"keycloak-builtin\", area=\"heap\"} / jvm_memory_max_bytes{job=\"keycloak-builtin\", area=\"heap\"}) * 100",
-            "legendFormat": "Heap Usage"
+            "expr": "sum(jvm_memory_used_bytes{job=\"keycloak-builtin\", area=\"heap\"}) / sum(jvm_memory_max_bytes{job=\"keycloak-builtin\", area=\"heap\"}) * 100",
+            "legendFormat": "Heap Usage",
+            "refId": "A",
+            "interval": "",
+            "step": 60
           }
         ],
         "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
@@ -91,10 +135,17 @@
         "id": 4,
         "title": "Active Threads",
         "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "targets": [
           {
             "expr": "jvm_threads_live_threads{job=\"keycloak-builtin\"}",
-            "legendFormat": "Threads"
+            "legendFormat": "Threads",
+            "refId": "A",
+            "interval": "",
+            "step": 60
           }
         ],
         "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
@@ -116,10 +167,17 @@
         "id": 5,
         "title": "HTTP Request Rate Over Time",
         "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "targets": [
           {
-            "expr": "rate(http_server_requests_seconds_count{job=\"keycloak-builtin\"}[1m])",
-            "legendFormat": "{{method}} {{uri}} ({{status}})"
+            "expr": "sum(rate(http_server_requests_seconds_count{job=\"keycloak-builtin\"}[1m])) by (method, status)",
+            "legendFormat": "{{method}} ({{status}})",
+            "refId": "A",
+            "interval": "1m",
+            "step": 60
           }
         ],
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
@@ -132,20 +190,33 @@
       },
       {
         "id": 6,
-        "title": "Response Time Percentiles",
+        "title": "Response Time Metrics",
         "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, rate(http_server_requests_seconds_bucket{job=\"keycloak-builtin\"}[5m]))",
-            "legendFormat": "50th percentile"
+            "expr": "sum(rate(http_server_requests_seconds_sum{job=\"keycloak-builtin\"}[5m])) / sum(rate(http_server_requests_seconds_count{job=\"keycloak-builtin\"}[5m]))",
+            "legendFormat": "Average Response Time",
+            "refId": "A",
+            "interval": "1m",
+            "step": 60
           },
           {
-            "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{job=\"keycloak-builtin\"}[5m]))",
-            "legendFormat": "95th percentile"
+            "expr": "max(http_server_requests_seconds_max{job=\"keycloak-builtin\"})",
+            "legendFormat": "Max Response Time",
+            "refId": "B",
+            "interval": "1m",
+            "step": 60
           },
           {
-            "expr": "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{job=\"keycloak-builtin\"}[5m]))",
-            "legendFormat": "99th percentile"
+            "expr": "sum(rate(http_server_requests_seconds_count{job=\"keycloak-builtin\"}[1m]))",
+            "legendFormat": "Total Request Rate",
+            "refId": "C",
+            "interval": "1m",
+            "step": 60
           }
         ],
         "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
@@ -160,18 +231,31 @@
         "id": 7,
         "title": "JVM Memory Usage",
         "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "targets": [
           {
-            "expr": "jvm_memory_used_bytes{job=\"keycloak-builtin\", area=\"heap\"}",
-            "legendFormat": "Heap Used"
+            "expr": "sum(jvm_memory_used_bytes{job=\"keycloak-builtin\", area=\"heap\"})",
+            "legendFormat": "Heap Used",
+            "refId": "A",
+            "interval": "1m",
+            "step": 60
           },
           {
-            "expr": "jvm_memory_max_bytes{job=\"keycloak-builtin\", area=\"heap\"}",
-            "legendFormat": "Heap Max"
+            "expr": "sum(jvm_memory_max_bytes{job=\"keycloak-builtin\", area=\"heap\"})",
+            "legendFormat": "Heap Max",
+            "refId": "B",
+            "interval": "1m",
+            "step": 60
           },
           {
-            "expr": "jvm_memory_used_bytes{job=\"keycloak-builtin\", area=\"nonheap\"}",
-            "legendFormat": "Non-Heap Used"
+            "expr": "sum(jvm_memory_used_bytes{job=\"keycloak-builtin\", area=\"nonheap\"})",
+            "legendFormat": "Non-Heap Used",
+            "refId": "C",
+            "interval": "1m",
+            "step": 60
           }
         ],
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
@@ -186,10 +270,17 @@
         "id": 8,
         "title": "HTTP Error Rate",
         "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "targets": [
           {
-            "expr": "rate(http_server_requests_seconds_count{job=\"keycloak-builtin\", status=~\"4..|5..\"}[1m])",
-            "legendFormat": "{{status}} errors"
+            "expr": "sum(rate(http_server_requests_seconds_count{job=\"keycloak-builtin\", status=~\"4..|5..\"}[5m]))",
+            "legendFormat": "Error Rate (4xx/5xx)",
+            "refId": "A",
+            "interval": "1m",
+            "step": 60
           }
         ],
         "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
@@ -202,4 +293,4 @@
       }
     ]
   }
-}
+
