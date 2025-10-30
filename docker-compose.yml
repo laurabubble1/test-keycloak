@@ -92,19 +92,41 @@ services:
       - /dev/kmsg:/dev/kmsg
     restart: unless-stopped
 
-  locust:
+  locust-master:
     image: locustio/locust
+    container_name: locust-master 
+    user: root 
     ports:
       - "8089:8089"
     volumes:
       - ./locustfile.py:/mnt/locust/locustfile.py
     command: >
       -f /mnt/locust/locustfile.py
-      --host http://host.docker.internal:8080
+      --master
+      --web-host 0.0.0.0
+      --host http://keycloak:8080
     depends_on:
       - keycloak
-    profiles:
-      - manual
+
+  locust-worker:
+    image: locustio/locust
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    command: >
+      -f /mnt/locust/locustfile.py
+      --worker
+      --master-host locust-master 
+    depends_on:
+      - locust-master
+    
+    # TODO: Remove if causes issue
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+
 
 volumes:
   pgdata:
